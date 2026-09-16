@@ -1,4 +1,4 @@
-# 🚢 Titanic Survival Prediction — Machine Learning Baseline
+# 🚢 Titanic Survival Prediction: Machine Learning Baseline
 
 A clean, leak-free, and reproducible Machine Learning project predicting passenger survival on the RMS Titanic using a **Logistic Regression** baseline. Built with `scikit-learn`'s `Pipeline` and `ColumnTransformer` to enforce strict methodological standards and prevent data leakage.
 
@@ -6,15 +6,16 @@ A clean, leak-free, and reproducible Machine Learning project predicting passeng
 
 ## 📌 Table of Contents
 - [Project Overview](#project-overview)
-- [Problem Statement](#problem-statement)
-- [Dataset Summary](#dataset-summary)
+- [Dataset Attribution & Description](#dataset-attribution--description)
+- [Data Quality & Initial Inspection](#data-quality--initial-inspection)
 - [Data Preprocessing & Leakage Prevention](#data-preprocessing--leakage-prevention)
 - [Feature Engineering & Selection](#feature-engineering--selection)
 - [Exploratory Data Analysis (EDA)](#exploratory-data-analysis-eda)
 - [Baseline Model Pipeline](#baseline-model-pipeline)
 - [Model Evaluation & Actual Metrics](#model-evaluation--actual-metrics)
-- [Interpretation of Results](#interpretation-of-results)
-- [Limitations & Future Work](#limitations--future-work)
+- [Metric Reasoning & Error Analysis](#metric-reasoning--error-analysis)
+- [Model Interpretability (Coefficient Analysis)](#model-interpretability-coefficient-analysis)
+- [Limitations & Future Improvements](#limitations--future-improvements)
 - [Project Structure](#project-structure)
 - [How to Run](#how-to-run)
 - [Author](#author)
@@ -23,101 +24,97 @@ A clean, leak-free, and reproducible Machine Learning project predicting passeng
 
 ## 📖 Project Overview
 
-The sinking of the RMS Titanic is one of the most well-known maritime tragedies in modern history. Of the 2,224 passengers and crew aboard, more than 1,500 died. This project investigates the demographic and socioeconomic factors that influenced survival and establishes an interpretable, leakage-free classification baseline.
-
-### Key Highlights
-* **Zero Data Leakage:** Imputation, scaling, and categorical encoding are encapsulated inside `Pipeline` and `ColumnTransformer`, fitted strictly on training data.
-* **Stratified 80/20 Train/Test Split:** Preserves class balance across partitions.
-* **Thorough EDA:** Includes visualizations of survival rates by gender, class, and age bracket with domain explanations.
-* **Interpretable Baseline:** Logistic Regression with log-odds coefficient analysis.
+This project builds an interpretable Machine Learning classification baseline to predict passenger survival outcomes from the 1912 RMS Titanic disaster. The project emphasizes core data science methodology:
+* **Zero Data Leakage:** Preprocessing operations (imputation, scaling, encoding) learn statistics strictly from training data.
+* **Stratified Splitting:** Preserves empirical class proportions across training and test partitions.
+* **Question-Driven EDA:** Evaluates survival associations using statistically careful observational language.
+* **Interpretable Reference Baseline:** Leverages Logistic Regression with log-odds coefficient analysis.
 
 ---
 
-## 🎯 Problem Statement
+## 📊 Dataset Attribution & Description
 
-Develop a binary classification model:
-$$\hat{y} \in \{0, 1\}$$
-where:
-* **0 = Perished** (Did not survive)
-* **1 = Survived**
-
-The model predicts whether a given passenger survived the disaster based on demographic, ticket, and familial features.
+* **Dataset:** **Kaggle Titanic `train.csv` dataset** (`titanic.csv`).
+* **Source:** Open benchmark dataset provided by Kaggle for the Titanic: Machine Learning from Disaster competition. *(The dataset was not created or collected by the author; it is the official benchmark dataset used for this assignment).*
+* **Scope:** Contains demographic, accommodation, ticket, and survival records for 891 passengers.
 
 ---
 
-## 📊 Dataset Summary
+## 🔍 Data Quality & Initial Inspection
 
-* **Source:** Kaggle Titanic Competition (`titanic.csv`)
-* **Total Records:** 891 passengers
-* **Total Columns:** 12
-* **Target Distribution:**
-  * Perished (`0`): 549 passengers (**61.62%**)
-  * Survived (`1`): 342 passengers (**38.38%**)
-* **Missing Value Audit:**
-  * `Cabin`: 687 missing (**77.10%**) — excluded due to excessive missingness.
-  * `Age`: 177 missing (**19.87%**) — imputed via median inside the training pipeline.
-  * `Embarked`: 2 missing (**0.22%**) — imputed via mode inside the training pipeline.
+| Data-Quality Check | Observed Result |
+| :--- | :--- |
+| **Total Rows (Passengers)** | 891 |
+| **Total Columns (Features)** | 12 |
+| **Missing Age Values** | 177 (19.87%) |
+| **Missing Cabin Values** | 687 (77.10%) |
+| **Missing Embarked Values** | 2 (0.22%) |
+| **Target Column** | `Survived` (Binary: 0 = Perished, 1 = Survived) |
+| **Target Distribution** | Perished (0): 549 (61.62%), Survived (1): 342 (38.38%) |
 
 ---
 
 ## ⚙️ Data Preprocessing & Leakage Prevention
 
-A critical flaw in naive ML workflows is computing imputation statistics or scaling parameters across the full dataset prior to splitting. In this project:
-1. The raw dataset is split into `X_train`, `X_test`, `y_train`, and `y_test` using:
+To prevent subtle data leakage, preprocessing statistics are never computed on the full dataset prior to partitioning:
+1. The dataset is split into `X_train`, `X_test`, `y_train`, and `y_test` using:
    ```python
    X_train, X_test, y_train, y_test = train_test_split(
        X, y, test_size=0.20, random_state=42, stratify=y
    )
    ```
-2. Imputation statistics (median for numerical, mode for categorical) and standardization parameters ($\mu, \sigma$) are computed **only** on `X_train` during `pipeline.fit()`.
-3. The test set (`X_test`) is held out and transformed strictly using the training parameters during `pipeline.predict()`.
+   * **80% training / 20% held-out test data:** 712 training samples and 179 test samples.
+   * **`random_state=42`:** Guarantees exact reproducibility across runs.
+   * **`stratify=y`:** Preserves the 61.62% / 38.38% class distribution in both splits.
+   * **Untouched Test Set:** The test set is held out completely until final model evaluation.
+2. Imputation statistics (median for numerical features, mode for categorical features), standardization parameters ($\mu, \sigma$), and one-hot encoding vocabularies are learned **strictly on `X_train`** during `pipeline.fit()`.
 
 ---
 
 ## 🛠️ Feature Engineering & Selection
 
 ### 1. Engineered Feature: `FamilySize`
-Combining individual family columns into a unified measure:
 $$\text{FamilySize} = \text{SibSp} + \text{Parch} + 1$$
-*(where $+1$ accounts for the passenger).*
+Combines sibling/spouse count and parent/child count with the passenger themselves ($+1$) to represent traveling party size.
 
-### 2. Feature Selection
+### 2. Feature Selection Setup
 * **Numerical Features (5):** `Age`, `Fare`, `SibSp`, `Parch`, `FamilySize`
-* **Categorical Features (3):** `Sex`, `Embarked`, `Pclass` (encoded categorically to avoid imposing arbitrary linear distance between ticket tiers)
+* **Categorical Features (3):** `Sex`, `Embarked`, `Pclass`  
+  *(Note: `Pclass` is explicitly treated as a categorical variable to avoid assuming equal linear distance between ticket classes).*
 
-### 3. Excluded Features & Justification
-* `PassengerId`: Arbitrary database primary key; zero generalizable signal.
-* `Name`: High-cardinality unique text string.
-* `Ticket`: Irregular, semi-structured alphanumeric codes with high cardinality.
-* `Cabin`: Missing in **77.10%** of rows. Imputing over three-quarters of missing values would introduce substantial artificial noise into a linear baseline.
+### 3. Methodological Exclusion Rationales
+* **`PassengerId`:** Identifier with no intended predictive meaning; excluded from the baseline to prevent arbitrary memorization.
+* **`Name`:** Contains potentially useful information (such as honorific titles) but requires additional feature extraction; excluded from this simple baseline.
+* **`Ticket`:** High-cardinality identifier/group information with irregular alphanumeric formatting; excluded from the baseline.
+* **`Cabin`:** Very high missingness in the original dataset (**687 out of 891 records, 77.10%**); excluded from this baseline rather than introducing a more complex missingness/deck imputation strategy.
 
 ---
 
-## 🔍 Exploratory Data Analysis (EDA)
+## 📈 Exploratory Data Analysis (EDA)
 
-### Key Insights:
+All visualizations are accompanied by statistically careful interpretations without making unsupported causal claims from observational data:
+
 1. **Survival by Gender:**
-   * Female survival rate: **74.2%**
-   * Male survival rate: **18.9%**
-   * *Takeaway:* Gender was the single most dominant factor determining survival, driven by the *"women and children first"* protocol.
+   * Female observed survival rate: **74.2%**
+   * Male observed survival rate: **18.9%**
+   * *Interpretation:* Survival rates differed substantially by gender in the dataset. While historical accounts of the evacuation give context regarding lifeboat access, the observational data demonstrates a very strong empirical association between gender and survival outcomes.
 2. **Survival by Passenger Class:**
-   * 1st Class: **63.0%**
-   * 2nd Class: **47.3%**
-   * 3rd Class: **24.2%**
-   * *Takeaway:* Strong socioeconomic gradient; first-class passengers enjoyed proximity to the boat deck and priority evacuation.
+   * 1st Class observed survival rate: **63.0%**
+   * 2nd Class observed survival rate: **47.3%**
+   * 3rd Class observed survival rate: **24.2%**
+   * *Interpretation:* Observed survival rates differed across ticket classes. While historical records describe differences in cabin proximity to the boat decks, within this observational dataset, passenger class provides a strong predictive indicator of survival probability.
 3. **Survival by Age Bracket:**
-   * Children (0–12 years): **58.0%** survival rate.
-   * Elderly (61+ years): **22.7%** survival rate.
-   * *Takeaway:* Young children were prioritized during evacuation; older passengers faced severe physical barriers.
+   * Children (0–12 years): **58.0%** observed survival rate.
+   * Elderly (61+ years): **22.7%** observed survival rate.
+   * Adults (19–60 years): Observed rates between **38% and 40%**.
+   * *Interpretation:* Children had a higher observed survival rate than older passengers in this dataset, indicating that age contains useful predictive information.
 4. **Correlation Analysis:**
-   * Negative correlation between `Pclass` and survival ($r = -0.34$).
+   * Inverse correlation between `Pclass` and survival ($r = -0.34$).
    * Positive correlation between `Fare` and survival ($r = +0.26$).
 
 ---
 
 ## 🤖 Baseline Model Pipeline
-
-A scikit-learn `Pipeline` combining `ColumnTransformer` with `LogisticRegression`:
 
 ```python
 numeric_transformer = Pipeline([
@@ -141,18 +138,16 @@ baseline_pipeline = Pipeline([
 ])
 ```
 
-### Why Logistic Regression?
-* Transparent and highly interpretable via log-odds coefficients.
-* Fast, stable, and convex optimization with minimal risk of arbitrary overfitting.
-* Yields well-calibrated probabilities, serving as the benchmark for any future complex architectures.
+### Baseline Model Choice
+Logistic Regression was selected as the baseline because Titanic survival is a binary classification problem. It provides a simple and interpretable reference model, while its coefficients allow us to examine the direction and relative contribution of encoded features.
 
 ---
 
-## 📈 Model Evaluation & Actual Metrics
+## 📊 Model Evaluation & Actual Metrics
 
 The pipeline was fitted **only** on the 712 training samples and evaluated on the **179 untouched held-out test samples**.
 
-### Held-Out Test Set Performance (Actual Results)
+### Held-Out Test Set Performance (Actual Un-Fabricated Results)
 
 | Metric | Score | Percentage |
 | :--- | :---: | :---: |
@@ -161,18 +156,13 @@ The pipeline was fitted **only** on the 712 training samples and evaluated on th
 | **Recall** | **0.6667** | **66.67%** |
 | **F1 Score** | **0.7244** | **72.44%** |
 
-### Confusion Matrix Breakdown (N = 179)
+### Confusion Matrix Breakdown ($N = 179$)
 
 ```
-                 Predicted Perished (0)    Predicted Survived (1)
-Actual Perished (0)        98 (TN)                   12 (FP)
-Actual Survived (1)        23 (FN)                   46 (TP)
+                     Predicted Perished (0)    Predicted Survived (1)
+Actual Perished (0)            98 (TN)                   12 (FP)
+Actual Survived (1)            23 (FN)                   46 (TP)
 ```
-
-* **True Negatives (TN = 98):** Correctly predicted passenger perished.
-* **True Positives (TP = 46):** Correctly predicted passenger survived.
-* **False Positives (FP = 12):** Predicted to survive, but actually perished.
-* **False Negatives (FN = 23):** Predicted to perish, but actually survived.
 
 ### Classification Report
 
@@ -189,36 +179,41 @@ weighted avg     0.8034    0.8045    0.8007       179
 
 ---
 
-## 💡 Interpretation of Results
+## 💡 Metric Reasoning & Error Analysis
 
-### Feature Coefficients (Log-Odds Impact):
-* **Strongest Positive Drivers:**
-  * `Sex_female` ($+1.3627$): Being female drastically increased log-odds of survival.
-  * `Pclass_1` ($+1.0361$): 1st class ticket holder status provided substantial survival advantage.
-* **Strongest Negative Drivers:**
-  * `Sex_male` ($-1.2431$): Being male heavily decreased log-odds of survival.
-  * `Pclass_3` ($-1.0558$): 3rd class steerage ticket holder status significantly reduced survival odds.
-* **Continuous Features:**
-  * `Age` ($-0.4892$): Each standard deviation increase in age reduced survival probability.
-  * `Fare` ($+0.1339$): Higher fare provided a slight positive survival probability boost.
+### Why Report Multiple Metrics?
+Accuracy measures the overall proportion of correct predictions. Precision measures how often passengers predicted to survive actually survived, while recall measures how many actual survivors were correctly identified. F1 combines precision and recall into a single balanced measure. Reporting all four provides a more complete evaluation than accuracy alone.
+
+In the context of Titanic survival prediction:
+* **False Positive (FP = 12):** The model predicted a passenger survived, but they actually did not survive.
+* **False Negative (FN = 23):** The model predicted a passenger did not survive, but they actually survived.
+
+Neither type of error is inherently more important than the other in this retrospective historical baseline; reporting both precision and recall provides full transparency into model error trade-offs.
 
 ---
 
-## 🚀 Limitations & Future Work
+## 🔍 Model Interpretability (Coefficient Analysis)
+
+The coefficients represent statistical associations learned by this linear model on the training data and do not establish causation:
+* The Logistic Regression coefficients indicate a **strong positive association** between the female indicator (`Sex_female`, $+1.3627$) and predicted survival probability.
+* First-class status (`Pclass_1`, $+1.0361$) had a **strong positive association** with predicted survival.
+* Third-class status (`Pclass_3`, $-1.0558$), male gender (`Sex_male`, $-1.2431$), and increasing age (`Age`, $-0.4892$) had **negative associations** in the fitted model.
+* Continuous fare (`Fare`, $+0.1339$) exhibited a modest positive association with predicted survival probability.
+
+---
+
+## 🚀 Limitations & Future Improvements
 
 ### Current Limitations:
-1. **Linear Decision Boundary:** Cannot model complex feature interactions (e.g., third-class women vs. first-class women).
-2. **Missing Spatial Deck Information:** Excluding `Cabin` omitted deck proximity signals.
-3. **Unused Honorifics:** Names contain titles (*Master*, *Miss*, *Mrs*, *Mr*) that provide richer social and age status.
+1. **Linearity Assumption:** Logistic Regression models linear log-odds decision boundaries, missing complex non-linear feature interactions without manual interaction terms.
+2. **Cabin Omission:** Omitting `Cabin` due to 77.10% missingness discarded potential spatial deck proximity signals.
+3. **Unused Text Data:** Passenger names contain social honorifics (*Master*, *Miss*, *Mrs*, *Mr*) that could offer additional demographic nuance.
 
-### Planned Improvements:
-1. **Feature Engineering:**
-   * Extract social titles from `Name` (`Mr`, `Mrs`, `Miss`, `Master`, `Noble`).
-   * Extract deck levels (`A` through `G`) from non-null `Cabin` records with an `Unknown` indicator.
-2. **Ensemble Modeling:**
-   * Benchmark against Random Forest, LightGBM, and XGBoost.
-3. **Cross-Validation & Tuning:**
-   * Perform 5-fold Stratified Cross-Validation with `GridSearchCV` to optimize regularization parameters.
+### Planned Next Steps:
+1. **Title Extraction:** Extract honorific titles from `Name` to refine age imputation and capture marital/social status.
+2. **Cabin Deck Extraction:** Extract deck letters from non-null `Cabin` records while handling missing values with an explicit `Missing` category.
+3. **Cross-Validation & Hyperparameter Tuning:** Cross-validation and hyperparameter tuning should be performed using the training data, with the final test set remaining untouched until final evaluation.
+4. **Non-Linear Ensembles:** Benchmark the Logistic Regression baseline against tree-based ensembles (Random Forest, Gradient Boosting, XGBoost).
 
 ---
 
@@ -226,9 +221,10 @@ weighted avg     0.8034    0.8045    0.8007       179
 
 ```
 Titanic-Survival-Prediction/
-├── titanic.csv               # Kaggle Titanic training dataset
-├── Titanic_Project.ipynb     # Complete, executed end-to-end Jupyter Notebook
-└── README.md                 # Project documentation and reproduction guide
+├── .gitignore                # Git exclusion rules for Python & Jupyter artifacts
+├── titanic.csv               # Kaggle Titanic train.csv dataset
+├── Titanic_Project.ipynb     # Fully executed Jupyter Notebook with all outputs
+└── README.md                 # Complete project documentation and reproduction guide
 ```
 
 ---
@@ -247,13 +243,13 @@ pip install pandas numpy matplotlib seaborn scikit-learn jupyter
 ```
 
 ### 3. Run the notebook
-Launch Jupyter Notebook or Jupyter Lab:
+Launch Jupyter Notebook:
 ```bash
 jupyter notebook Titanic_Project.ipynb
 ```
 Or execute headlessly from the command line:
 ```bash
-jupyter nbconvert --to notebook --execute Titanic_Project.ipynb --output Titanic_Project_executed.ipynb
+jupyter nbconvert --to notebook --execute Titanic_Project.ipynb --output Titanic_Project.ipynb
 ```
 
 ---
